@@ -538,42 +538,44 @@ class ST7789:
                 err += dx
             x1 += 1
 
-    def circle(self, center, radius, c, section=100):
+    def circle(self, x, y , radius, c, section=100):
         """
         画圆
 
         Args:
             c: 颜色
-            center: 中心(x, y)
+            x: 中心 x 坐标
+            y: 中心 y 坐标
             radius: 半径
             section: 分段
         """
         arr = []
         for m in range(section + 1):
-            x = round(radius * math.cos((2 * math.pi / section) * m - math.pi) + center[0])
-            y = round(radius * math.sin((2 * math.pi / section) * m - math.pi) + center[1])
-            arr.append([x, y])
+            _x = round(radius * math.cos((2 * math.pi / section) * m - math.pi) + x)
+            _y = round(radius * math.sin((2 * math.pi / section) * m - math.pi) + y)
+            arr.append([_x, _y])
         for i in range(len(arr) - 1):
             self.line(*arr[i], *arr[i + 1], c)
 
-    def fill_circle(self, center, radius, c):
+    def fill_circle(self, x, y, radius, c):
         """
         画填充圆
 
         Args:
             c: 颜色
-            center: 中心(x, y)
+            x: 中心 x 坐标
+            y: 中心 y 坐标
             radius: 半径
         """
         rsq = radius * radius
-        for x in range(radius):
-            y = int(math.sqrt(rsq - x * x))  # 计算 y 坐标
-            y0 = center[1] - y
-            end_y = y0 + y * 2
+        for _x in range(radius):
+            _y = int(math.sqrt(rsq - _x * _x))  # 计算 y 坐标
+            y0 = y - _y
+            end_y = y0 + _y * 2
             y0 = max(0, min(y0, self.height))  # 将 y0 限制在画布的范围内
             length = abs(end_y - y0) + 1
-            self.vline(center[0] + x, y0, length, c)  # 绘制左右两侧的垂直线
-            self.vline(center[0] - x, y0, length, c)
+            self.vline(x + _x, y0, length, c)  # 绘制左右两侧的垂直线
+            self.vline(x - _x, y0, length, c)
 
     # def image(self, file_name):
     #     with open(file_name, "rb") as bmp:
