@@ -89,6 +89,15 @@ class EasyDisplay:
         """
         self.display.fill(0)
 
+    def show(self):
+        """
+        显示
+        """
+        try:
+            self.display.show()
+        except AttributeError:
+            pass
+
     @staticmethod
     def _calculate_palette(color, bg_color) -> tuple:
         """
