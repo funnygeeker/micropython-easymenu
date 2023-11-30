@@ -33,11 +33,11 @@ class EasyMenu:
         self.option_index[-1] = 0
         self.show()
 
-    def previous_line(self):
+    def prev_line(self):
         """移到菜单上一行"""
         for _ in range(self.sub_menu['layout'][0] - 1):
-            self.previous(False, False)
-        self.previous()
+            self.prev(False, False)
+        self.prev()
 
     def next_line(self):
         """移到菜单下一行"""
@@ -45,7 +45,7 @@ class EasyMenu:
             self.next(False, False)
         self.next()
 
-    def previous(self, show=True, check=True):
+    def prev(self, show=True, check=True):
         """
         移到上一项
 
@@ -57,7 +57,7 @@ class EasyMenu:
         while not i:
             self.option_index[-1] -= 1
             if self.option_index[-1] < 0:  # 向前翻页
-                self.previous_page(show=False, check=False)
+                self.prev_page(show=False, check=False)
             if check:
                 i = self.select().get('select', True)
             else:
@@ -90,7 +90,7 @@ class EasyMenu:
         if show:
             self.show()
 
-    def previous_page(self, show=True, check=True):
+    def prev_page(self, show=True, check=True):
         """
        移到上一页
 
@@ -109,7 +109,7 @@ class EasyMenu:
         else:
             self.option_index[-1] = self.page_len - 1
         if check and not self.select().get('select', True):
-            self.previous(show, check)
+            self.prev(show, check)
         else:
             if show:
                 self.show()
@@ -155,7 +155,7 @@ class EasyMenu:
             size = self.ed.size
         return int((self.ed.display.height - 1 - size) / 2)
 
-    def img(self, file: str, x, y, reversion=False):
+    def img(self, file: str, x, y, invert=False):
         """
         显示图片
 
@@ -163,19 +163,19 @@ class EasyMenu:
             file: 图片所在的路径
             x: 图片在屏幕中的起始 x 坐标
             y: 图片在屏幕中的起始 y 坐标
-            reversion: 反色显示图片（仅适用于 bmp 和 pbm 图像）
+            invert: 反色显示图片（仅适用于 bmp 和 pbm 图像）
         """
         fmt = file.split('.')[-1]  # 简单的格式判断
         if fmt == 'bmp':
-            self.ed.bmp(file, x, y, clear=False, show=False, reversion=reversion)
+            self.ed.bmp(file, x, y, clear=False, show=False, invert=invert)
         elif fmt == 'pbm':
-            self.ed.pbm(file, x, y, clear=False, show=False, reversion=reversion)
+            self.ed.pbm(file, x, y, clear=False, show=False, invert=invert)
         elif fmt == 'dat':
             self.ed.dat(file, x, y, clear=False, show=False)
         else:
             raise TypeError('Unsupported image format! "Check if the file extension is supported: pbm, bmp, dat')
 
-    def text(self, text: str, x, y, color: int = None, bg_color: int = None, size: int = None, reversion: bool = False):
+    def text(self, text: str, x, y, color: int = None, bg_color: int = None, size: int = None, invert: bool = False):
         """
         显示文本
 
@@ -186,7 +186,7 @@ class EasyMenu:
            color: 文本颜色
            bg_color: 文本背景颜色
            size: 文本大小
-           reversion: 反色显示
+           invert: 反色显示
         """
         if isinstance(x, str):  # 对齐方式识别
             if x == 'center':
@@ -206,7 +206,12 @@ class EasyMenu:
                 y = self.sub_menu['start'][4] - size
             else:
                 raise TypeError("Unsupported alignment!")
-        self.ed.text(text, x, y, color=color, bg_color=bg_color, size=size, reversion=reversion, auto_wrap=True)
+        if color is None:
+            color = self.ed.color
+        if bg_color is None:
+            bg_color = self.ed.bg_color
+        self.ed.text(text, x, y, color=color, bg_color=bg_color, size=size, invert=invert, auto_wrap=True, clear=False,
+                     show=False, key=color if invert else bg_color)
 
     def refresh_conf(self):
         """刷新当前菜单配置：继承上级菜单设置，并更新选项数量"""
@@ -214,13 +219,13 @@ class EasyMenu:
         # 将修改写入菜单
         if len(self.page_index) > 1:  # 当前菜单为子菜单
             index = [x + y for x, y in zip(self.page_index[:-1], self.option_index[:-1])]  # 当前选项的绝对索引为两项相对索引之和
-            previous_menu = self.get_menu(index).copy()  # 继承上级菜单的选项
-            previous_menu_conf = {}
-            for k, v in previous_menu.items():  # 过滤出字典中所有非数字开头值
+            prev_menu = self.get_menu(index).copy()  # 继承上级菜单的选项
+            prev_menu_conf = {}
+            for k, v in prev_menu.items():  # 过滤出字典中所有非数字开头值
                 if not isinstance(k, int):
-                    previous_menu_conf[k] = v
-            previous_menu_conf.update(menu)  # 合并并继承菜单选项
-            self.sub_menu = previous_menu_conf  # 刷新子菜单
+                    prev_menu_conf[k] = v
+            prev_menu_conf.update(menu)  # 合并并继承菜单选项
+            self.sub_menu = prev_menu_conf  # 刷新子菜单
             self.refresh_menu(refresh=True)
             self.modify_menu(self.menu, index, self.sub_menu)  # 将子菜单的修改写入父菜单
         else:  # 当前菜单为父菜单
@@ -264,7 +269,7 @@ class EasyMenu:
         page_len = menu['layout'][0] * menu['layout'][1]
         self.page_len = page_len if page_len <= self.menu_len else self.menu_len  # 实际页面长度应少于当前菜单长度
         while menu['_len'] < self.page_index[-1] + self.option_index[-1] + 1:  # 若超出菜单索引范围则尝试修正
-            self.previous(show=False)
+            self.prev(show=False)
 
     def select(self) -> dict:
         """
@@ -287,6 +292,8 @@ class EasyMenu:
             del self.page_index[-1]
             del self.option_index[-1]
             self.refresh_conf()
+            if not self.select().get('select', True):  # 避免索引为 0 的选项设为不选则时被选中
+                self.next(show=False)
             self.show()
 
     def enter(self, show: bool = True):
@@ -303,6 +310,8 @@ class EasyMenu:
             self.page_index.append(0)  # 为菜单创建索引
             self.option_index.append(0)
             self.refresh_conf()  # 刷新当前菜单的配置文件
+            if not self.select().get('select', True):  # 避免索引为 0 的选项设为不选则时被选中
+                self.next(show=False)
             if show:
                 self.show()
             return None
@@ -360,31 +369,31 @@ class EasyMenu:
                     offset_x, offset_y = menu.get('offset') or (0, 0)
                 else:
                     raise TypeError("The configuration format of the menu is incorrect!")
-                reversion = False
+                invert = False
                 text_x = x + offset_x
                 text_y = y + offset_y
                 if index == self.option_index[-1]:  # 不启用样式，则默认被选中的选项文字反色
-                    reversion = True
+                    invert = True
                     # 显示选中的外边框
                     if menu['style'].get('border', 1):
                         dp.fill_rect(x, y, menu['spacing'][0], menu['spacing'][1], self.ed.color)
-                        self.text(text, text_x, text_y, reversion=reversion)  # 为了正常显示四角的背景像素点，必须放在此位置
+                        self.text(text, text_x, text_y, invert=invert)  # 为了正常显示四角的背景像素点，必须放在此位置
                         for _x in [x, x + menu['spacing'][0] - 1]:
                             for _y in [y, y + menu['spacing'][1] - 1]:
                                 dp.pixel(_x, _y, self.ed.bg_color)
                     else:
-                        self.text(text, text_x, text_y, reversion=reversion)
+                        self.text(text, text_x, text_y, invert=invert)
                 else:
-                    self.text(text, text_x, text_y, reversion=reversion)
+                    self.text(text, text_x, text_y, invert=invert)
             if option.get('img'):  # 存在图片则显示
-                reversion = False
-                if menu['style'].get('img_reversion', 0) and index == self.option_index[-1]:  # 启用图片反色且选项被选中
-                    reversion = True
+                invert = False
+                if menu['style'].get('img_invert', 0) and index == self.option_index[-1]:  # 启用图片反色且选项被选中
+                    invert = True
                 if isinstance(option['img'], tuple) or isinstance(option['img'], list):
-                    self.img(option['img'][0], x + option['img'][1], y + option['img'][2], reversion=reversion)
+                    self.img(option['img'][0], x + option['img'][1], y + option['img'][2], invert=invert)
                 elif isinstance(option['img'], str):
                     offset_x, offset_y = menu.get('offset') or (0, 0)  # 对元素的位置进行偏移补偿
-                    self.img(option['img'], x + offset_x, y + offset_y, reversion=reversion)
+                    self.img(option['img'], x + offset_x, y + offset_y, invert=invert)
                 else:
                     raise TypeError("The configuration format of the menu is incorrect!")
             layout_x += 1
@@ -461,7 +470,7 @@ class NumSet:
         if num_max is not None and num_min is not None and num_max < num_min:
             raise Exception("The Max parameter must be greater than the Min parameter.")
 
-    def previous(self):
+    def prev(self):
         """
         减小数字（上一项）
         """
@@ -522,15 +531,15 @@ class NumSet:
 
 
 class KeyBoard(EasyMenu):
-    def __init__(self, ed, layout: tuple, spacing: tuple = None, start: tuple = None, offset: tuple = None):
+    def __init__(self, ed, layout: tuple, start: tuple = None, spacing: tuple = None, offset: tuple = None):
         """
         初始化键盘实例
 
         Args:
             ed: micropython-easydisplay 实例
             layout: 布局：每页的选项数：(x, y)
-            spacing: 间距：每个选项的 (x, y) 间距
             start: 起始点：(x, y)
+            spacing: 间距：每个选项的 (x, y) 间距
             offset: 偏移量：未单独设置偏移的选项，每个选项的偏移量
         """
         self.ed = ed
@@ -590,7 +599,7 @@ class KeyBoard(EasyMenu):
 
     def up(self):
         """选项光标向上"""
-        self.previous_line()
+        self.prev_line()
 
     def down(self):
         """选项光标向下"""
@@ -598,7 +607,7 @@ class KeyBoard(EasyMenu):
 
     def left(self):
         """选项光标向左"""
-        self.previous()
+        self.prev()
 
     def right(self):
         """选项光标向右"""
