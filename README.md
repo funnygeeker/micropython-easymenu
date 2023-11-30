@@ -18,6 +18,7 @@ A simple menu library for Micropython that allows you to construct a menu throug
 - [micropython-easybutton](https://github.com/funnygeeker/micropython-easybutton)
 
 ### Usage Example
+
 ```python
 # This is an example of usage
 import time
@@ -33,7 +34,7 @@ dp = st7789_spi.ST7789(width=240, height=240, spi=spi, cs=0, dc=1, rst=11, rotat
 ed = EasyDisplay(display=dp, font="/font/text_lite_16px_2311.v3.bmf", show=True, color=0xFFFF, clear=True,
                  color_type=framebuf.RGB565)
 menu = {
-    'offset':(16,16),
+    'offset': (16, 16),
     'title': ('Test Menu', 'center', 0),
     'start': (0, 22),
     'layout': (2, 2),
@@ -50,10 +51,10 @@ menu = {
 }
 em = EasyMenu(ed, menu)
 time.sleep(3)
-em.previous()  # Previous option
+em.prev()  # Previous option
 time.sleep(3)
 em.next()  # Next option
-print(em.select()) # Outputs the content of the current option
+print(em.select())  # Outputs the content of the current option
 ```
 
 For examples and explanations about EasyDisplay, please visit: [micropython-easydisplay](https://github.com/funnygeeker/micropython-easydisplay)
@@ -81,13 +82,13 @@ menu = {'_len': 1,
         'clear': (0, 0, 239, 239),
         # Clearing the screen area: (x_start, y_start, x_end, y_end) If not filled in, default to full screen. 
         # This option can be used to implement multiple menus on the same screen simultaneously.
-        'style': {'border': 0, 'title_line': 1, 'img_reversion': 0},
+        'style': {'border': 0, 'title_line': 1, 'img_invert': 0},
         # Style: If not filled in, default values will be used. Please fill in a dictionary:
         # border: Style of the outer border. In the current version, 0 means no outer border 
         # (the selected option will be highlighted), and 1 means having an outer border 
         # (the selected option will be highlighted).
         # title_line: Add a line below the title, 0 for disable and 1 for enable.
-        # img_reversion: Images will be displayed with reversed colors. Only applicable to bmp and pbm images.
+        # img_invert: Images will be displayed with reversed colors. Only applicable to bmp and pbm images.
         'layout': (4, 1),
         # Layout: If not filled in, it will be automatically calculated, but it is recommended to fill in.
         # (x, y), x * y options per page.
