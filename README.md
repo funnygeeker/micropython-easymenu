@@ -1,7 +1,9 @@
 [简体中文 (Chinese)](./README.ZH-CN.md)
 # micropython-easymenu
+- A simple menu library for Micropython that allows you to construct a menu through simple configuration.
+- Can even be used to implement a keyboard!!!
+![IMG_20231117_152427](https://github.com/funnygeeker/micropython-easymenu/assets/96659329/2c880f4a-1556-4ba6-b919-eb7874c2ea18)
 
-A simple menu library for Micropython that allows you to construct a menu through simple configuration.
 
 ### Tested Development Boards
 - esp32c3
