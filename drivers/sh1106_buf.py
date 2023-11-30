@@ -41,6 +41,7 @@ class SH1106(framebuf.FrameBuffer):
         # flip() was called rotate() once, provide backwards compatibility.
         self.rotate = self.flip
         self.init_display()
+        self.back_light(255)
 
     def init_display(self):
         self.reset()
