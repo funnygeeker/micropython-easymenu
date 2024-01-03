@@ -3,6 +3,7 @@
 - micropython 的简易菜单库，可以通过简单的配置，构造一个菜单
 - 甚至你可以用它来实现一个键盘！！！
 ![IMG_20231117_152427](https://github.com/funnygeeker/micropython-easymenu/assets/96659329/2c880f4a-1556-4ba6-b919-eb7874c2ea18)
+![IMG_20240103_171254](https://github.com/funnygeeker/micropython-easymenu/assets/96659329/5fd0e46c-50e4-4441-8dc2-64247ca8383a)
 
 ### 已测试的开发板
 - esp32c3, esp32s3, esp01s
