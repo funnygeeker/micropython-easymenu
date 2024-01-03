@@ -1,6 +1,7 @@
 import math
 import framebuf
 import utime as time
+from machine import Pin
 from micropython import const
 
 # a few register definitions
@@ -250,7 +251,8 @@ class SH1106_I2C(SH1106):
                  rotate=0, external_vcc=False, delay=0):
         self.i2c = i2c
         self.addr = addr
-        self.res = res
+        if res is not None:
+            self.res = Pin(res, Pin.OUT, Pin.PULL_DOWN)
         self.temp = bytearray(2)
         self.delay = delay
         if res is not None:
@@ -272,15 +274,14 @@ class SH1106_I2C(SH1106):
 class SH1106_SPI(SH1106):
     def __init__(self, width, height, spi, dc, res=None, cs=None,
                  rotate=0, external_vcc=False, delay=0):
-        dc.init(dc.OUT, value=0)
-        if res is not None:
-            res.init(res.OUT, value=0)
-        if cs is not None:
-            cs.init(cs.OUT, value=1)
         self.spi = spi
-        self.dc = dc
-        self.res = res
-        self.cs = cs
+        if res is not None:
+            self.res = Pin(res, Pin.OUT, Pin.PULL_DOWN)
+        self.dc = Pin(dc, Pin.OUT, Pin.PULL_DOWN)
+        if cs is None:
+            self.cs = int
+        else:
+            self.cs = Pin(cs, Pin.OUT, Pin.PULL_DOWN)
         self.delay = delay
         super().__init__(width, height, external_vcc, rotate)
 

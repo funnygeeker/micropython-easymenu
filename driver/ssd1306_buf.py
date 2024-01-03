@@ -2,6 +2,7 @@
 # MicroPython SSD1306 OLED driver, I2C and SPI interfaces
 import math
 import framebuf
+from machine import Pin
 from micropython import const
 
 # register definitions
@@ -22,6 +23,7 @@ SET_DISP_CLK_DIV = const(0xD5)
 SET_PRECHARGE = const(0xD9)
 SET_VCOM_DESEL = const(0xDB)
 SET_CHARGE_PUMP = const(0x8D)
+
 
 # Subclassing FrameBuffer provides support for graphics primitives
 # http://docs.micropython.org/en/latest/pyboard/library/framebuf.html
@@ -136,7 +138,7 @@ class SSD1306(framebuf.FrameBuffer):
         """
         self.contrast(value)
 
-    def circle(self, x, y , radius, c, section=100):
+    def circle(self, x, y, radius, c, section=100):
         """
         画圆
 
@@ -197,9 +199,12 @@ class SSD1306_I2C(SSD1306):
 class SSD1306_SPI(SSD1306):
     def __init__(self, width, height, spi, dc, res, cs, external_vcc=False):
         self.rate = 10 * 1024 * 1024
-        dc.init(dc.OUT, value=0)
-        res.init(res.OUT, value=0)
-        cs.init(cs.OUT, value=1)
+        self.res = Pin(res, Pin.OUT, Pin.PULL_DOWN)
+        self.dc = Pin(dc, Pin.OUT, Pin.PULL_DOWN)
+        if cs is None:
+            self.cs = int
+        else:
+            self.cs = Pin(cs, Pin.OUT, Pin.PULL_DOWN)
         self.spi = spi
         self.dc = dc
         self.res = res
