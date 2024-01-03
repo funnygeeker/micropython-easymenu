@@ -1,36 +1,67 @@
-# 适用于 ST7735 的 SPI 直接驱动
+# 适用于 ST7789 的 Framebuffer 驱动
 # Github: https://github.com/funnygeeker/micropython-easydisplay
 # Author: funnygeeker
 # Licence: MIT
 # Date: 2023/11/30
 #
 # 参考资料:
-# https://github.com/AntonVanke/micropython-ufont
-# https://blog.csdn.net/weixin_57604547/article/details/120535485
+# https://github.com/russhughes/st7789py_mpy/
+# https://github.com/AntonVanke/MicroPython-uFont
 # https://github.com/cheungbx/st7735-esp8266-micropython/blob/master/st7735.py
+import gc
 import math
+import framebuf
 from struct import pack
 from machine import Pin, PWM
 from micropython import const
 from time import sleep_us, sleep_ms
 
-#   ST7735V registers definitions
-SWRESET = const(0x01)
-SLPOUT = const(0x11)
-SLPIN = const(0x10)
-NORON = const(0x13)
+# commands
+ST7789_NOP = const(0x00)
+ST7789_SWRESET = const(0x01)
+ST7789_RDDID = const(0x04)
+ST7789_RDDST = const(0x09)
 
-INVOFF = const(0x20)
-INVON = const(0x21)
-DISPON = const(0x29)
-CASET = const(0x2A)
-RASET = const(0x2B)
-RAMWR = const(0x2C)
-RAMRD = const(0x2E)
+ST7789_SLPIN = const(0x10)
+ST7789_SLPOUT = const(0x11)
+ST7789_PTLON = const(0x12)
+ST7789_NORON = const(0x13)
 
-MADCTL = const(0x36)
-COLMOD = const(0x3A)
+ST7789_INVOFF = const(0x20)
+ST7789_INVON = const(0x21)
+ST7789_DISPOFF = const(0x28)
+ST7789_DISPON = const(0x29)
+ST7789_CASET = const(0x2A)
+ST7789_RASET = const(0x2B)
+ST7789_RAMWR = const(0x2C)
+ST7789_RAMRD = const(0x2E)
 
+ST7789_PTLAR = const(0x30)
+ST7789_VSCRDEF = const(0x33)
+ST7789_COLMOD = const(0x3A)
+ST7789_MADCTL = const(0x36)
+ST7789_VSCSAD = const(0x37)
+
+ST7789_MADCTL_MY = const(0x80)
+ST7789_MADCTL_MX = const(0x40)
+ST7789_MADCTL_MV = const(0x20)
+ST7789_MADCTL_ML = const(0x10)
+ST7789_MADCTL_BGR = const(0x08)
+ST7789_MADCTL_MH = const(0x04)
+ST7789_MADCTL_RGB = const(0x00)
+
+ST7789_RDID1 = const(0xDA)
+ST7789_RDID2 = const(0xDB)
+ST7789_RDID3 = const(0xDC)
+ST7789_RDID4 = const(0xDD)
+
+COLOR_MODE_65K = const(0x50)
+COLOR_MODE_262K = const(0x60)
+COLOR_MODE_12BIT = const(0x03)
+COLOR_MODE_16BIT = const(0x05)
+COLOR_MODE_18BIT = const(0x06)
+COLOR_MODE_16M = const(0x07)
+#
 FRMCTR1 = const(0xB1)
 FRMCTR2 = const(0xB2)
 FRMCTR3 = const(0xB3)
@@ -60,32 +91,38 @@ _DECODE_PIXEL = ">BBB"
 
 _BUFFER_SIZE = const(256)
 
-GMCTRP1 = const(0xE0)
-GMCTRN1 = const(0xE1)
+_BIT7 = const(0x80)
+_BIT6 = const(0x40)
+_BIT5 = const(0x20)
+_BIT4 = const(0x10)
+_BIT3 = const(0x08)
+_BIT2 = const(0x04)
+_BIT1 = const(0x02)
+_BIT0 = const(0x01)
 
 # Rotation tables (width, height, xstart, ystart)
 
-SCREEN_128X160 = [(128, 160, 0, 0),
-                  (160, 128, 0, 0),
-                  (128, 160, 0, 0),
-                  (160, 128, 0, 0),
-                  (128, 160, 0, 0),
-                  (160, 128, 0, 0),
-                  (128, 160, 0, 0)]
-SCREEN_128X128 = [(128, 128, 2, 1),
-                  (128, 128, 1, 2),
-                  (128, 128, 2, 3),
-                  (128, 128, 3, 2),
-                  (128, 128, 2, 1),
-                  (128, 128, 1, 2),
-                  (128, 128, 2, 3)]
-SCREEN_80X160 = [(80, 160, 26, 1),
-                 (160, 80, 1, 26),
-                 (80, 160, 26, 1),
-                 (160, 80, 1, 26),
-                 (80, 160, 26, 1),
-                 (160, 80, 1, 26),
-                 (80, 160, 26, 1)]
+WIDTH_320 = [(240, 320, 0, 0),
+             (320, 240, 0, 0),
+             (240, 320, 0, 0),
+             (320, 240, 0, 0),
+             (240, 320, 0, 0),
+             (320, 240, 0, 0),
+             (240, 320, 0, 0)]  # 320x240
+WIDTH_240 = [(240, 240, 0, 0),
+             (240, 240, 0, 0),
+             (240, 240, 80, 0),
+             (240, 240, 0, 80),
+             (240, 240, 0, 0),
+             (240, 240, 0, 0),
+             (240, 240, 80, 0)]  # 240x240
+WIDTH_135 = [(135, 240, 52, 40),
+             (240, 135, 40, 53),
+             (135, 240, 53, 40),
+             (240, 135, 40, 52),
+             (135, 240, 52, 40),
+             (240, 135, 40, 53),
+             (135, 240, 53, 40)]  # 135x240
 # on MADCTL to control display rotation/color layout
 # Looking at display with pins on top.
 # 00 = upper left printing right
@@ -111,9 +148,9 @@ def _encode_pixel(c):
     return pack(_ENCODE_PIXEL, c)
 
 
-class ST7735:
-    def __init__(self, width: int, height: int, spi, rst: int, dc: int,
-                 cs: int = None, bl: int = None, rotate: int = 0, rgb=True, invert: bool = True):
+class ST7789(framebuf.FrameBuffer):
+    def __init__(self, width: int, height: int, spi, res: int, dc: int,
+                 cs: int = None, bl: int = None, rotate: int = 0, rgb: bool = True, invert: bool = True):
         """
         初始化屏幕驱动
 
@@ -121,7 +158,7 @@ class ST7735:
             width: 宽度
             height: 高度
             spi: SPI 实例
-            rst: RESET 引脚
+            res: RESET 引脚
             dc: Data / Command 引脚
             cs: 片选引脚
             bl: 背光引脚
@@ -134,7 +171,7 @@ class ST7735:
         self.x_start = 0
         self.y_start = 0
         self.spi = spi
-        self.rst = Pin(rst, Pin.OUT, Pin.PULL_DOWN)
+        self.res = Pin(res, Pin.OUT, Pin.PULL_DOWN)
         self.dc = Pin(dc, Pin.OUT, Pin.PULL_DOWN)
         if cs is None:
             self.cs = int
@@ -164,22 +201,20 @@ class ST7735:
         self._write(PWCTR5, bytearray([0x8A, 0xEE]))
         self._write(VMCTR1, bytearray([0x0E]))
         #
-        self._write(COLMOD, bytearray([0x05]))  # color mode
+        self._set_color_mode(COLOR_MODE_65K | COLOR_MODE_16BIT)
         sleep_ms(50)
+        gc.collect()  # 垃圾收集
+        self.buffer = bytearray(self.height * self.width * 2)
         self.rotate(self._rotate)
         self.invert(invert)
         sleep_ms(10)
-        self.write_cmd(GMCTRP1)
-        self.write_data(
-            bytearray([0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10]))
-        self.write_cmd(GMCTRN1)
-        self.write_data(
-            bytearray([0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e, 0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10]))
-        self.write_cmd(NORON)
-        sleep_us(10)
-        self.write_cmd(DISPON)
+        self._write(ST7789_NORON)
+        sleep_ms(10)
+        self._write(ST7789_DISPON)
         sleep_ms(100)
+        # super().__init__(self.buffer, self.width, self.height, framebuf.RGB565)
         self.clear()
+        self.show()
 
     def _write(self, command=None, data=None):
         """SPI write to the device: commands and data."""
@@ -221,11 +256,11 @@ class ST7735:
         Hard reset display.
         """
         self.cs(0)
-        self.rst(1)
+        self.res(1)
         sleep_ms(50)
-        self.rst(0)
+        self.res(0)
         sleep_ms(50)
-        self.rst(1)
+        self.res(1)
         sleep_ms(150)
         self.cs(1)
 
@@ -233,16 +268,16 @@ class ST7735:
         """
         Soft reset display.
         """
-        self._write(SWRESET)
+        self._write(ST7789_SWRESET)
         sleep_ms(150)
 
     def poweron(self):
         """Disable display sleep mode."""
-        self._write(SLPOUT)
+        self._write(ST7789_SLPOUT)
 
     def poweroff(self):
         """Enable display sleep mode."""
-        self._write(SLPIN)
+        self._write(ST7789_SLPIN)
 
     def invert(self, value):
         """
@@ -253,9 +288,20 @@ class ST7735:
             inversion mode
         """
         if value:
-            self._write(INVON)
+            self._write(ST7789_INVON)
         else:
-            self._write(INVOFF)
+            self._write(ST7789_INVOFF)
+
+    def _set_color_mode(self, mode):
+        """
+        Set display color mode.
+
+        Args:
+            mode (int): color mode
+                COLOR_MODE_65K, COLOR_MODE_262K, COLOR_MODE_12BIT,
+                COLOR_MODE_16BIT, COLOR_MODE_18BIT, COLOR_MODE_16M
+        """
+        self._write(ST7789_COLMOD, bytes([mode & 0x77]))
 
     def rotate(self, rotate):
         """
@@ -273,19 +319,20 @@ class ST7735:
         """
         self._rotate = rotate
         madctl = ROTATIONS[rotate]
-        if (self.width == 160 and self.height == 80) or (self.width == 80 and self.height == 160):
-            table = SCREEN_80X160
-        elif (self.width == 160 and self.height == 128) or (self.width == 128 and self.height == 160):
-            table = SCREEN_128X160
-        elif self.width == 128 and self.height == 128:
-            table = SCREEN_128X128
+        if self.width == 320:
+            table = WIDTH_320
+        elif self.width == 240:
+            table = WIDTH_240
+        elif self.width == 135:
+            table = WIDTH_135
         else:
             raise ValueError(
-                "Unsupported display. 128x160, 128x128 and 80x160 are supported."
+                "Unsupported display. 320x240, 240x240 and 135x240 are supported."
             )
 
         self.width, self.height, self.x_start, self.y_start = table[rotate]
-        self._write(MADCTL, bytes([madctl | 0x00 if self._rgb else 0x08]))
+        super().__init__(self.buffer, self.width, self.height, framebuf.RGB565, self.width)
+        self._write(ST7789_MADCTL, bytes([madctl | (0x00 if self._rgb else 0x08)]))
 
     def _set_columns(self, start, end):
         """
@@ -296,7 +343,7 @@ class ST7735:
             end (int): column end address
         """
         if start <= end <= self.width:
-            self._write(CASET, _encode_pos(
+            self._write(ST7789_CASET, _encode_pos(
                 start + self.x_start, end + self.x_start))
 
     def _set_rows(self, start, end):
@@ -308,7 +355,7 @@ class ST7735:
             end (int): row end address
        """
         if start <= end <= self.height:
-            self._write(RASET, _encode_pos(
+            self._write(ST7789_RASET, _encode_pos(
                 start + self.y_start, end + self.y_start))
 
     def set_window(self, x0, y0, x1, y1):
@@ -324,7 +371,7 @@ class ST7735:
         if x0 < self.width and y0 < self.height:
             self._set_columns(x0, x1)
             self._set_rows(y0, y1)
-            self._write(RAMWR)
+            self._write(ST7789_RAMWR)
 
     def clear(self):
         """
@@ -336,12 +383,8 @@ class ST7735:
         """
         将帧缓冲区数据发送到屏幕
         """
-        pass  # 无帧缓冲区
-
-    # @staticmethod
-    # def color(r, g, b):
-    #     c = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3)
-    #     return (c >> 8) | ((c & 0xFF) << 8)
+        self.set_window(0, 0, self.width - 1, self.height - 1)  # 如果没有这行就会偏移
+        self.write_data(self.buffer)
 
     def rgb(self, enable: bool):
         """
@@ -351,7 +394,7 @@ class ST7735:
             enable: RGB else BGR
         """
         self._rgb = enable
-        self._write(MADCTL, bytes([ROTATIONS[self._rotation] | 0x00 if self._rgb else 0x08]))
+        self._write(ST7789_MADCTL, bytes([ROTATIONS[self._rotate] | (0x00 if self._rgb else 0x08)]))
 
     @staticmethod
     def color(r, g, b):
@@ -373,137 +416,7 @@ class ST7735:
         data = value * 0xffff >> 8
         self.bl.duty_u16(data)
 
-    def vline(self, x, y, h, c):
-        """
-        Draw vertical line at the given location and color.
-
-        Args:
-            x (int): x coordinate
-            y (int): y coordinate
-            h (int): length of line
-            c (int): 565 encoded color
-        """
-        self.fill_rect(x, y, 1, h, c)
-
-    def hline(self, x, y, w, c):
-        """
-        Draw horizontal line at the given location and color.
-
-        Args:
-            x (int): x coordinate
-            y (int): y coordinate
-            w (int): length of line
-            c (int): 565 encoded color
-        """
-        self.fill_rect(x, y, w, 1, c)
-
-    def pixel(self, x, y, c: int = None):
-        """
-        Draw a pixel at the given location and color.
-
-        Args:
-            x (int): x coordinate
-            y (int): y coordinate
-            c (int): 565 encoded color
-        """
-        self.set_window(x, y, x, y)
-        self._write(None, _encode_pixel(c))
-
-    def blit_buffer(self, buffer, x, y, width, height):
-        """
-        Copy buffer to display at the given location.
-
-        Args:
-            buffer (bytes): Data to copy to display
-            x (int): Top left corner x coordinate
-            y (int): Top left corner y coordinate
-            width (int): Width
-            height (int): Height
-        """
-        self.set_window(x, y, x + width - 1, y + height - 1)
-        self._write(None, buffer)
-
-    def rect(self, x, y, w, h, c):
-        """
-        Draw a rectangle at the given location, size and color.
-
-        Args:
-            x (int): Top left corner x coordinate
-            y (int): Top left corner y coordinate
-            w (int): Width in pixels
-            h (int): Height in pixels
-            c (int): 565 encoded color
-        """
-        self.hline(x, y, w, c)
-        self.vline(x, y, h, c)
-        self.vline(x + w - 1, y, h, c)
-        self.hline(x, y + h - 1, w, c)
-
-    def fill_rect(self, x, y, w, h, c):
-        """
-        Draw a rectangle at the given location, size and filled with color.
-
-        Args:
-            x (int): Top left corner x coordinate
-            y (int): Top left corner y coordinate
-            w (int): Width in pixels
-            h (int): Height in pixels
-            c (int): 565 encoded color
-        """
-        self.set_window(x, y, x + w - 1, y + h - 1)
-        chunks, rest = divmod(w * h, _BUFFER_SIZE)
-        pixel = _encode_pixel(c)
-        self.dc(1)
-        if chunks:
-            data = pixel * _BUFFER_SIZE
-            for _ in range(chunks):
-                self._write(None, data)
-        if rest:
-            self._write(None, pixel * rest)
-
-    def fill(self, c):
-        """
-        Fill the entire FrameBuffer with the specified color.
-
-        Args:
-            c (int): 565 encoded color
-        """
-        self.fill_rect(0, 0, self.width, self.height, c)
-
-    def line(self, x1, y1, x2, y2, c):
-        """
-        Draw a single pixel wide line starting at x0, y0 and ending at x1, y1.
-
-        Args:
-            x1 (int): Start point x coordinate
-            y1 (int): Start point y coordinate
-            x2 (int): End point x coordinate
-            y2 (int): End point y coordinate
-            c (int): 565 encoded color
-        """
-        steep = abs(y2 - y1) > abs(x2 - x1)
-        if steep:
-            x1, y1 = y1, x1
-            x2, y2 = y2, x2
-        if x1 > x2:
-            x1, x2 = x2, x1
-            y1, y2 = y2, y1
-        dx = x2 - x1
-        dy = abs(y2 - y1)
-        err = dx // 2
-        ystep = 1 if y1 < y2 else -1
-        while x1 <= x2:
-            if steep:
-                self.pixel(y1, x1, c)
-            else:
-                self.pixel(x1, y1, c)
-            err -= dy
-            if err < 0:
-                y1 += ystep
-                err += dx
-            x1 += 1
-
-    def circle(self, x, y , radius, c, section=100):
+    def circle(self, x, y, radius, c, section=100):
         """
         画圆
 

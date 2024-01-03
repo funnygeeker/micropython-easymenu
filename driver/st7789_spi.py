@@ -1,4 +1,4 @@
-# 适用于 ST7789 的 Framebuffer 驱动
+# 适用于 ST7789 的 SPI 直接驱动
 # Github: https://github.com/funnygeeker/micropython-easydisplay
 # Author: funnygeeker
 # Licence: MIT
@@ -8,9 +8,7 @@
 # https://github.com/russhughes/st7789py_mpy/
 # https://github.com/AntonVanke/MicroPython-uFont
 # https://github.com/cheungbx/st7735-esp8266-micropython/blob/master/st7735.py
-import gc
 import math
-import framebuf
 from struct import pack
 from machine import Pin, PWM
 from micropython import const
@@ -148,9 +146,9 @@ def _encode_pixel(c):
     return pack(_ENCODE_PIXEL, c)
 
 
-class ST7789(framebuf.FrameBuffer):
-    def __init__(self, width: int, height: int, spi, rst: int, dc: int,
-                 cs: int = None, bl: int = None, rotate: int = 0, rgb=True, invert: bool = True):
+class ST7789:
+    def __init__(self, width: int, height: int, spi, res: int, dc: int,
+                 cs: int = None, bl: int = None, rotate: int = 0, rgb: bool = True, invert: bool = True):
         """
         初始化屏幕驱动
 
@@ -158,7 +156,7 @@ class ST7789(framebuf.FrameBuffer):
             width: 宽度
             height: 高度
             spi: SPI 实例
-            rst: RESET 引脚
+            res: RESET 引脚
             dc: Data / Command 引脚
             cs: 片选引脚
             bl: 背光引脚
@@ -171,7 +169,7 @@ class ST7789(framebuf.FrameBuffer):
         self.x_start = 0
         self.y_start = 0
         self.spi = spi
-        self.rst = Pin(rst, Pin.OUT, Pin.PULL_DOWN)
+        self.res = Pin(res, Pin.OUT, Pin.PULL_DOWN)
         self.dc = Pin(dc, Pin.OUT, Pin.PULL_DOWN)
         if cs is None:
             self.cs = int
@@ -203,8 +201,6 @@ class ST7789(framebuf.FrameBuffer):
         #
         self._set_color_mode(COLOR_MODE_65K | COLOR_MODE_16BIT)
         sleep_ms(50)
-        gc.collect()  # 垃圾收集
-        self.buffer = bytearray(self.height * self.width * 2)
         self.rotate(self._rotate)
         self.invert(invert)
         sleep_ms(10)
@@ -212,9 +208,7 @@ class ST7789(framebuf.FrameBuffer):
         sleep_ms(10)
         self._write(ST7789_DISPON)
         sleep_ms(100)
-        # super().__init__(self.buffer, self.width, self.height, framebuf.RGB565)
         self.clear()
-        self.show()
 
     def _write(self, command=None, data=None):
         """SPI write to the device: commands and data."""
@@ -256,11 +250,11 @@ class ST7789(framebuf.FrameBuffer):
         Hard reset display.
         """
         self.cs(0)
-        self.rst(1)
+        self.res(1)
         sleep_ms(50)
-        self.rst(0)
+        self.res(0)
         sleep_ms(50)
-        self.rst(1)
+        self.res(1)
         sleep_ms(150)
         self.cs(1)
 
@@ -331,8 +325,7 @@ class ST7789(framebuf.FrameBuffer):
             )
 
         self.width, self.height, self.x_start, self.y_start = table[rotate]
-        super().__init__(self.buffer, self.width, self.height, framebuf.RGB565, self.width)
-        self._write(ST7789_MADCTL, bytes([madctl | 0x00 if self._rgb else 0x08]))
+        self._write(ST7789_MADCTL, bytes([madctl | (0x00 if self._rgb else 0x08)]))
 
     def _set_columns(self, start, end):
         """
@@ -383,8 +376,7 @@ class ST7789(framebuf.FrameBuffer):
         """
         将帧缓冲区数据发送到屏幕
         """
-        self.set_window(0, 0, self.width - 1, self.height - 1)  # 如果没有这行就会偏移
-        self.write_data(self.buffer)
+        pass  # 无帧缓冲区
 
     def rgb(self, enable: bool):
         """
@@ -394,7 +386,7 @@ class ST7789(framebuf.FrameBuffer):
             enable: RGB else BGR
         """
         self._rgb = enable
-        self._write(ST7789_MADCTL, bytes([ROTATIONS[self._rotate] | 0x00 if self._rgb else 0x08]))
+        self._write(ST7789_MADCTL, bytes([ROTATIONS[self._rotate] | (0x00 if self._rgb else 0x08)]))
 
     @staticmethod
     def color(r, g, b):
@@ -416,7 +408,137 @@ class ST7789(framebuf.FrameBuffer):
         data = value * 0xffff >> 8
         self.bl.duty_u16(data)
 
-    def circle(self, x, y , radius, c, section=100):
+    def vline(self, x, y, h, c):
+        """
+        Draw vertical line at the given location and color.
+
+        Args:
+            x (int): x coordinate
+            y (int): y coordinate
+            h (int): length of line
+            c (int): 565 encoded color
+        """
+        self.fill_rect(x, y, 1, h, c)
+
+    def hline(self, x, y, w, c):
+        """
+        Draw horizontal line at the given location and color.
+
+        Args:
+            x (int): x coordinate
+            y (int): y coordinate
+            w (int): length of line
+            c (int): 565 encoded color
+        """
+        self.fill_rect(x, y, w, 1, c)
+
+    def pixel(self, x, y, c: int = None):
+        """
+        Draw a pixel at the given location and color.
+
+        Args:
+            x (int): x coordinate
+            y (int): y coordinate
+            c (int): 565 encoded color
+        """
+        self.set_window(x, y, x, y)
+        self._write(None, _encode_pixel(c))
+
+    def blit_buffer(self, buffer, x, y, width, height):
+        """
+        Copy buffer to display at the given location.
+
+        Args:
+            buffer (bytes): Data to copy to display
+            x (int): Top left corner x coordinate
+            y (int): Top left corner y coordinate
+            width (int): Width
+            height (int): Height
+        """
+        self.set_window(x, y, x + width - 1, y + height - 1)
+        self._write(None, buffer)
+
+    def rect(self, x, y, w, h, c):
+        """
+        Draw a rectangle at the given location, size and color.
+
+        Args:
+            x (int): Top left corner x coordinate
+            y (int): Top left corner y coordinate
+            w (int): Width in pixels
+            h (int): Height in pixels
+            c (int): 565 encoded color
+        """
+        self.hline(x, y, w, c)
+        self.vline(x, y, h, c)
+        self.vline(x + w - 1, y, h, c)
+        self.hline(x, y + h - 1, w, c)
+
+    def fill_rect(self, x, y, w, h, c):
+        """
+        Draw a rectangle at the given location, size and filled with color.
+
+        Args:
+            x (int): Top left corner x coordinate
+            y (int): Top left corner y coordinate
+            w (int): Width in pixels
+            h (int): Height in pixels
+            c (int): 565 encoded color
+        """
+        self.set_window(x, y, x + w - 1, y + h - 1)
+        chunks, rest = divmod(w * h, _BUFFER_SIZE)
+        pixel = _encode_pixel(c)
+        self.dc(1)
+        if chunks:
+            data = pixel * _BUFFER_SIZE
+            for _ in range(chunks):
+                self._write(None, data)
+        if rest:
+            self._write(None, pixel * rest)
+
+    def fill(self, c):
+        """
+        Fill the entire FrameBuffer with the specified color.
+
+        Args:
+            c (int): 565 encoded color
+        """
+        self.fill_rect(0, 0, self.width, self.height, c)
+
+    def line(self, x1, y1, x2, y2, c):
+        """
+        Draw a single pixel wide line starting at x0, y0 and ending at x1, y1.
+
+        Args:
+            x1 (int): Start point x coordinate
+            y1 (int): Start point y coordinate
+            x2 (int): End point x coordinate
+            y2 (int): End point y coordinate
+            c (int): 565 encoded color
+        """
+        steep = abs(y2 - y1) > abs(x2 - x1)
+        if steep:
+            x1, y1 = y1, x1
+            x2, y2 = y2, x2
+        if x1 > x2:
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+        dx = x2 - x1
+        dy = abs(y2 - y1)
+        err = dx // 2
+        ystep = 1 if y1 < y2 else -1
+        while x1 <= x2:
+            if steep:
+                self.pixel(y1, x1, c)
+            else:
+                self.pixel(x1, y1, c)
+            err -= dy
+            if err < 0:
+                y1 += ystep
+                err += dx
+            x1 += 1
+
+    def circle(self, x, y, radius, c, section=100):
         """
         画圆
 
