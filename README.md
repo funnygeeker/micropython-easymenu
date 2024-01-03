@@ -1,154 +1,137 @@
 [简体中文 (Chinese)](./README.ZH-CN.md)
 # micropython-easymenu
 - A simple menu library for Micropython that allows you to construct a menu through simple configuration.
-- Can even be used to implement a keyboard!!!
+- You can even use it to implement a keyboard!!!
+
 ![IMG_20231117_152427](https://github.com/funnygeeker/micropython-easymenu/assets/96659329/2c880f4a-1556-4ba6-b919-eb7874c2ea18)
 
-
 ### Tested Development Boards
-- esp32c3
+- esp32c3, esp32s3, esp01s
 
 #### Tested Screens
-- st7789
+- st7789, st7735, ssd1306
 
 ### Software Dependencies
 
-#### Mandatory
+#### Required
 - [micropython-easydisplay](https://github.com/funnygeeker/micropython-easydisplay)
 
 #### Optional
 - [micropython-easybutton](https://github.com/funnygeeker/micropython-easybutton)
 
-### Usage Example
+### Usage Examples
+For examples and instructions regarding EasyDisplay, please visit: [micropython-easydisplay](https://github.com/funnygeeker/micropython-easydisplay)
 
 ```python
-# This is an example of usage
-import time
-import framebuf
 from machine import SPI, Pin
-from drivers import st7789_spi
-from libs.easydisplay import EasyDisplay
-from libs.easymenu import EasyMenu
+from driver import st7735_buf
+from lib.easydisplay import EasyDisplay
+from lib.easymenu import EasyMenu, MenuItem, BackItem, ValueItem, ToggleItem
 
-# ESP32C3 & ST7789
-spi = SPI(1, baudrate=20000000, polarity=0, phase=0, sck=Pin(19), mosi=Pin(18))
-dp = st7789_spi.ST7789(width=240, height=240, spi=spi, cs=0, dc=1, rst=11, rotation=1)
-ed = EasyDisplay(display=dp, font="/font/text_lite_16px_2311.v3.bmf", show=True, color=0xFFFF, clear=True,
-                 color_type=framebuf.RGB565)
-menu = {
-    'offset': (16, 16),
-    'title': ('Test Menu', 'center', 0),
-    'start': (0, 22),
-    'layout': (2, 2),
-    'spacing': (60, 20),
-    0: {'text': 'TEXT0'},
-    1: {'text': 'TEXT1',
-        0: {'text': ('TEXT1-0', 0, 0)},
-        1: {'text': ('TEXT1-1', 0, 0)}
-        },
-    2: {'text': ('TEXT2', 0, 0)},
-    3: {'text': ('TEXT3', 0, 0)},
-    4: {'text': ('TEXT4', 0, 0)},
-    5: {'text': ('TEXT5', 0, 0)}
-}
+spi = SPI(1, baudrate=20000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(17))
+dp = st7735_buf.ST7735(width=128, height=128, spi=spi, cs=14, dc=15, res=16, rotate=1, bl=13, invert=False, rgb=False)
+ed = EasyDisplay(display=dp, font="/text_lite_16px_2312.v3.bmf", show=True, color=0xFFFF, clear=True,
+                 color_type="RGB565")
+
+status = True
+
+
+def get_ip():
+    return "0.0.0.0"
+
+
+def get_status():
+    global status
+    return status
+
+
+def change_status():
+    global status
+    status = not status
+
+
+menu = MenuItem(title=('Menu', 'c', 0), layout=[1, 3], spacing=[128, 16])  # Specify title, layout, and spacing for parent menu
+
+menu1 = MenuItem('Menu-1')  # Set options for Menu-1
+menu1.add(ValueItem('Time: ', '123'))
+menu1.add(ValueItem(('TEST', 'c', 'c')))
+menu1.add(ToggleItem('Select:', get_status, change_status, value_t='[*]', value_f='[ ]'))
+menu1.add(BackItem('Back'))
+
+menu.add(menu1)  # Add options to the menu
+menu.add(MenuItem('Menu-2'))
+menu.add(MenuItem(('Menu-3', 5, 0)))
+menu.add(ValueItem('Status:', 'OK'))
+menu.add(ValueItem('IP:', (get_ip, 'r', 'c'), skip=True))  # Skip the function for the cursor
+
 em = EasyMenu(ed, menu)
-time.sleep(3)
-em.prev()  # Previous option
-time.sleep(3)
-em.next()  # Next option
-print(em.select())  # Outputs the content of the current option
-```
+em.show()
 
-For examples and explanations about EasyDisplay, please visit: [micropython-easydisplay](https://github.com/funnygeeker/micropython-easydisplay)
+# Finally, you can try manually executing:
+# em.prev()
+# em.next()
+# em.click()
+# em.next()
+# em.next()
+# em.click()
+# em.back()
 
-### Configuration Explanation
-- Note: You can add extra data in the standard menu specification and use the `enter()` and `select()` functions to read the extended data to achieve certain functionalities.
-- The detailed explanation and an example of the `menu` parameter configuration are as follows:
-```python
-menu = {'_len': 1,
-        # Current page menu length (automatically managed by the program, please do not fill in if unnecessary)
-        'image': ('/img/text.pbm', 0, 0),
-        # Menu page image: If not filled in, it will not be displayed. Tuple ('image file path', x, y) 
-        # is supported, either as a tuple or as a list. Images can be dat, pbm, or bmp format. 
-        # The tuple can also be replaced with a list. Images need to include the file extension. 
-        # For detailed image instructions, please refer to micropython-easydisplay.
-        'title': ('Main Menu', 'center', 0),
-        # Menu page title: If not filled in, it will not be displayed. There are two formats:
-        # Tuple ('title', x, y) or a string 'title' (default centered text, y-coordinate is 0).
-        # The tuple can also be replaced with a list. The x-coordinate of the title supports using 
-        # 'center', 'left', 'right' instead, and the y-coordinate supports using 'center', 'top', 
-        # 'bottom' instead.
-        'start': (0, 0),
-        # Starting point of options: If not filled in, it will be automatically calculated. Starting
-        # from (x, y), each option is displayed at a length equal to the spacing.
-        'clear': (0, 0, 239, 239),
-        # Clearing the screen area: (x_start, y_start, x_end, y_end) If not filled in, default to full screen. 
-        # This option can be used to implement multiple menus on the same screen simultaneously.
-        'style': {'border': 0, 'title_line': 1, 'img_invert': 0},
-        # Style: If not filled in, default values will be used. Please fill in a dictionary:
-        # border: Style of the outer border. In the current version, 0 means no outer border 
-        # (the selected option will be highlighted), and 1 means having an outer border 
-        # (the selected option will be highlighted).
-        # title_line: Add a line below the title, 0 for disable and 1 for enable.
-        # img_invert: Images will be displayed with reversed colors. Only applicable to bmp and pbm images.
-        'layout': (4, 1),
-        # Layout: If not filled in, it will be automatically calculated, but it is recommended to fill in.
-        # (x, y), x * y options per page.
-        'offset': (0, 0),
-        # Offset: Default is (0, 0). Adds an offset to all images and texts in the options that have not 
-        # specified an offset.
-        'spacing': (100, 20),
-        # Spacing: If not filled in, it will be automatically calculated, but it is recommended to fill in. 
-        # Coordinates (x, y) for the starting point interval of each option.
-        0: {'text': ('option-1', 0, 0),
-            # If not filled in, it will not be displayed. There are two formats: 
-            # Tuple ('text', x, y) or a string 'text' (default offset is (0, 0)).
-            # The tuple can also be replaced with a list. The offset of text can only be expressed as a number.
-            'img': ('/img/text.dat', 0, 0),
-            # Option image: If not filled in, it will not be displayed. Tuple ('image file path', x, y) 
-            # or a string 'image file path' (default offset is (0, 0)) is supported. 
-            # Images can be dat, pbm, or bmp format. The tuple can also be replaced with a list. 
-            # Images need to include the file extension. For detailed image instructions, please refer 
-            # to micropython-easydisplay.
-            'select': True,
-            # Whether it can be selected: If not filled in, default to False. When select is True, 
-            # the option or menu will be displayed, but the cursor will automatically skip this option and 
-            # cannot be selected.
-            },
-        # This is an example of a regular option. If an option contains a key with the number 0, 
-        # the option will be recognized as a menu, and when the enter() function is used, 
-        # it will enter the next level menu.
-        1: {'title': 'Sub Menu',
-            'text': 'option-2',
-            'img': '/img/text.dat',
-            'image': ('/img/text.pbm', 0, 0),
-            0: {
-                'text': 'option-2-1'
-                },
-            1: {
-                'text': 'option-2-2'
-                }
-            },
-        # This is an example of a menu containing menu options.
-        }
-```
+# For other example codes, please visit the /example folder
+"""
+Parameters for parent menu of MenuItem will be inherited by child menus if not explicitly set
 
-- A typical example is as follows:
-```python
-menu = {
-    'offset':(16,16),
-    'title': ('Test Menu', 'center', 0),
-    'start': (0, 22),
-    'layout': (2, 2),
-    'spacing': (60, 20),
-    0: {'text': 'TEXT0'},
-    1: {'text': 'TEXT1',
-        0: {'text': ('TEXT1-0', 0, 0)},
-        1: {'text': ('TEXT1-1', 0, 0)}
-        },
-    2: {'text': ('TEXT2', 0, 0)},
-    3: {'text': ('TEXT3', 0, 0)},
-    4: {'text': ('TEXT4', 0, 0)},
-    5: {'text': ('TEXT5', 0, 0)}
-}
+1. Parameters for title / value / img: You can pass a tuple, list, string, or function, with the following usage options:
+    'Menu' # Ordinary string
+    func # A function that returns the content to be displayed when called
+    ('Menu', 0, 0)  # 0 for the x-axis offset and y-axis offset, using the top-left corner of the current option as the reference
+    ['Menu', 0, 0]
+    (func, 0, 0)
+    [func, 0, 0]
+    (func, 'c', 'c') # 'c' indicates 'center', and the content is centered within the current option area. Note: Only applicable to title / value, img is not supported
+    ('Menu', 'c', 'c')
+
+    Supported alignment parameters:
+    X-axis: 'l': left, 'r': right, 'c': center
+    Y-axis: 't': top, 'b': bottom, 'c': center
+
+2. skip parameter:
+    When this parameter is True, the option will not be selected, it will be skipped directly
+
+3. items parameter:
+    Pass a list of MenuItem, ValueItem, or ToggleItem instances. If the option has sub-options, it will act as a menu. Additionally, you can use the `add` function of the MenuItem instance to add items to the current menu
+
+4. clear parameter:
+    Specify an area to clear the screen: (x_start, y_start, x_end, y_end). When the menu needs to be refreshed, the image in this area will be cleared. 
+    Proper use of this parameter allows for displaying multiple menus on one screen.
+
+5. parent parameter:
+    Parent menu instance of the option. If needed, you can fill in this parameter manually, or use the `add` function of the parent menu instead
+
+6. start parameter:
+    The starting coordinates for displaying the menu (x_start, y_start), generating options from this position
+
+7. style parameter: 
+    The default menu style can be changed through the style parameter:
+        title-line: A horizontal line under the menu title, default is 1 (enabled), set to 0 to disable
+        img-invert: Invert the color of the img image when the option is selected, default is 0 (disabled), set to 1 to enable
+        text-invert: Invert the color of the text when the option is selected, default is 1 (enabled), set to 0 to disable
+        border: When the option is selected, generate a filled square with a background color that is the reverse of the color of the text or image
+        border-pixel: After the border is generated, draw pixels at the corners of the border to give it a more rounded appearance
+        name: Default alignment or offset when the name parameter is not set, default value is ['l', 'c']
+        title: Default alignment or offset when the title parameter is not set, default value is ['c', 't']
+        value: Default alignment or offset when the value parameter is not set, default value is ['r', 'c']
+        img: Default alignment or offset when the img parameter is not set, default value is [0, 0]
+
+8. layout parameter:
+    Display the menu with the layout of each page (x, y)
+
+9. spacing parameter:
+    Distance between the top-left corner of each option
+
+10. callback parameter:
+    When the click() function of EasyMenu is called, if the current option is selected, the specified function will be executed
+
+11. data parameter:
+    Additional data that can be added and retrieved when needed, currently does not have a specific purpose
+"""
 ```
