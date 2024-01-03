@@ -104,6 +104,7 @@ if __name__ == "__main__":
 
 
     kb = KeyBoard(ed, done=d, esc=(print, "ESC"))
+    kb.show()
     # kb.prev()
     # kb.click()
     # kb.back()
