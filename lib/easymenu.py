@@ -23,7 +23,7 @@ def _call(func, *args) -> str:
         result = func[0](*tuple(list(in_args) + list(args)))
     else:
         result = func
-    return '' if result is None else str(result)
+    return '' if result else str(result)
 
 
 class EasyMenu:
@@ -338,16 +338,22 @@ class EasyMenu:
 
     def click(self, show: bool = True):
         """
-        点击，执行当前项的回调函数，进入下级菜单，若无下级菜单则返回当前选项
+        执行当前项的回调函数，并进入下级菜单，若无下级菜单则返回当前选项
+        Execute the callback function of the current item and enter the lower menu.
+        If there is no lower menu, return to the current option.
 
         Args:
             show: 是否刷新屏幕
         Returns:
             (None) 菜单
             (Object) 当前选项对象
+
+        Notes:
+            回调函数存在非空返回值时，show 参数将被设置为 False
+            When the callback function has a non-null return value, the show parameter is set to False
         """
         item = self.get_option()
-        _call(item.callback)  # 执行当前项的回调函数，可以在回调函数中用于生成子菜单
+        result = _call(item.callback)  # 执行当前项的回调函数，可以在回调函数中用于生成子菜单
         if len(item.items) > 0:  # 存在选项（menu 不为空）则存在菜单
             self.menu = item
             self.menu.page_index = 0
@@ -355,7 +361,7 @@ class EasyMenu:
             self._update_conf()
             if self.get_option().skip:  # 避免索引为 0 的选项设为不选则时被选中
                 self.next(show=False)
-            if show:
+            if show and not result:
                 self.show()
             return None
         elif (type(item) == ValueItem or type(item) == ToggleItem) and show:  # 刷新页面数据
@@ -366,9 +372,12 @@ class EasyMenu:
         else:
             return item
 
-    def show(self):
+    def show(self, show=True):
         """
         将对菜单的更改输出到屏幕
+
+        Args:
+            show: 是否立即显示
         """
         menu = self.menu
         dp = self.ed.display
@@ -465,7 +474,8 @@ class EasyMenu:
 
             layout_x += 1
         try:
-            dp.show()
+            if show:
+                dp.show()
         except AttributeError:
             pass
         return True
