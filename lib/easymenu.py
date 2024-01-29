@@ -1,7 +1,7 @@
 # Github: https://github.com/funnygeeker/micropython-easymenu
 # Author: funnygeeker
 # Licence: MIT
-# Date: 2023/1/3
+# Date: 2023/1/19
 
 def _call(func, *args) -> str:
     """
@@ -23,7 +23,7 @@ def _call(func, *args) -> str:
         result = func[0](*tuple(list(in_args) + list(args)))
     else:
         result = func
-    return '' if result else str(result)
+    return '' if not result else str(result)
 
 
 class EasyMenu:
@@ -573,11 +573,15 @@ class MenuItem:
         添加选项
 
         Args:
-            item: MenuItem, BackItem, ValueItem 或 ToggleItem 实例
+            item: MenuItem, BackItem, ValueItem 或 ToggleItem 实例 或 包含上述内容的列表
             parent: 父菜单实例
         """
-        item.parent = parent if parent else self
-        self.items.append(item)
+        if isinstance(item, list) or isinstance(item, tuple):
+            for i in item:
+                self.add(i, parent)
+        else:
+            item.parent = parent if parent else self
+            self.items.append(item)
 
     def clear(self):
         """清除所有条目"""
