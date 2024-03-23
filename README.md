@@ -31,8 +31,7 @@ from lib.easymenu import EasyMenu, MenuItem, BackItem, ValueItem, ToggleItem
 
 spi = SPI(1, baudrate=20000000, polarity=0, phase=0, sck=Pin(18), mosi=Pin(17))
 dp = st7735_buf.ST7735(width=128, height=128, spi=spi, cs=14, dc=15, res=16, rotate=1, bl=13, invert=False, rgb=False)
-ed = EasyDisplay(display=dp, font="/text_lite_16px_2312.v3.bmf", show=True, color=0xFFFF, clear=True,
-                 color_type="RGB565")
+ed = EasyDisplay(dp, "RGB565", font="/text_lite_16px_2312.v3.bmf", show=True, color=0xFFFF, clear=True)
 
 status = True
 
